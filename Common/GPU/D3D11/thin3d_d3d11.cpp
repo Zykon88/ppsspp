@@ -248,6 +248,7 @@ private:
 	uint8_t stencilRef_ = 0;
 	uint8_t stencilWriteMask_ = 0xFF;
 	uint8_t stencilCompareMask_ = 0xFF;
+
 	bool stencilDirty_ = true;
 
 	// Temporaries
