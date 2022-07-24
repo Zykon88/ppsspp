@@ -558,7 +558,7 @@ public:
 	void SetScissorRect(int left, int top, int width, int height) override;
 	void SetViewports(int count, Viewport *viewports) override;
 	void SetBlendFactor(float color[4]) override;
-	void SetStencilRef(uint8_t ref) override;
+	void SetStencilParams(uint8_t refValue, uint8_t writeMask, uint8_t compareMask) override;
 
 	void Draw(int vertexCount, int offset) override;
 	void DrawIndexed(int vertexCount, int offset) override;
@@ -729,8 +729,6 @@ DepthStencilState *D3D9Context::CreateDepthStencilState(const DepthStencilStateD
 	ds->stencilPass = stencilOpToD3D9[(int)desc.stencil.passOp];
 	ds->stencilFail = stencilOpToD3D9[(int)desc.stencil.failOp];
 	ds->stencilZFail = stencilOpToD3D9[(int)desc.stencil.depthFailOp];
-	ds->stencilWriteMask = desc.stencil.writeMask;
-	ds->stencilCompareMask = desc.stencil.compareMask;
 	return ds;
 }
 
@@ -1018,8 +1016,10 @@ void D3D9Context::SetBlendFactor(float color[4]) {
 	device_->SetRenderState(D3DRS_BLENDFACTOR, r | (g << 8) | (b << 16) | (a << 24));
 }
 
-void D3D9Context::SetStencilRef(uint8_t ref) {
-	device_->SetRenderState(D3DRS_STENCILREF, (DWORD)ref);
+void D3D9Context::SetStencilParams(uint8_t refValue, uint8_t writeMask, uint8_t compareMask) {
+	device_->SetRenderState(D3DRS_STENCILREF, (DWORD)refValue);
+	device_->SetRenderState(D3DRS_STENCILWRITEMASK, (DWORD)writeMask);
+	device_->SetRenderState(D3DRS_STENCILMASK, (DWORD)compareMask);
 }
 
 bool D3D9ShaderModule::Compile(LPDIRECT3DDEVICE9 device, const uint8_t *data, size_t size) {
