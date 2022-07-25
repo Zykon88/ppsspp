@@ -480,7 +480,8 @@ TexCacheEntry *TextureCacheCommon::SetTexture() {
 		if (match && (entry->status & TexCacheEntry::STATUS_TO_REPLACE) && replacementTimeThisFrame_ < replacementFrameBudget_) {
 			int w0 = gstate.getTextureWidth(0);
 			int h0 = gstate.getTextureHeight(0);
-			ReplacedTexture &replaced = FindReplacement(entry, w0, h0);
+			int d0 = 1;
+			ReplacedTexture &replaced = FindReplacement(entry, w0, h0, d0);
 			if (replaced.Valid()) {
 				match = false;
 				reason = "replacing";
@@ -491,6 +492,7 @@ TexCacheEntry *TextureCacheCommon::SetTexture() {
 			// got one!
 			gstate_c.curTextureWidth = w;
 			gstate_c.curTextureHeight = h;
+			gstate_c.SetTextureIs3D((entry->status & TexCacheEntry::STATUS_3D) != 0);
 			if (rehash) {
 				// Update in case any of these changed.
 				entry->sizeInRAM = (textureBitsPerPixel[format] * bufw * h / 2) / 8;
@@ -596,6 +598,7 @@ TexCacheEntry *TextureCacheCommon::SetTexture() {
 
 	gstate_c.curTextureWidth = w;
 	gstate_c.curTextureHeight = h;
+	gstate_c.SetTextureIs3D((entry->status & TexCacheEntry::STATUS_3D) != 0);
 
 	nextTexture_ = entry;
 	if (nextFramebufferTexture_) {
@@ -1131,6 +1134,13 @@ void TextureCacheCommon::NotifyVideoUpload(u32 addr, int size, int width, GEBuff
 }
 
 void TextureCacheCommon::LoadClut(u32 clutAddr, u32 loadBytes) {
+	if (loadBytes == 0) {
+		// Don't accidentally overwrite clutTotalBytes_ with a zero.
+		return;
+	}
+
+	u32 startPos = gstate.getClutIndexStartPos();
+
 	clutTotalBytes_ = loadBytes;
 	clutRenderAddress_ = 0xFFFFFFFF;
 
@@ -1287,7 +1297,12 @@ u32 TextureCacheCommon::EstimateTexMemoryUsage(const TexCacheEntry *entry) {
 	return pixelSize << (dimW + dimH);
 }
 
-ReplacedTexture &TextureCacheCommon::FindReplacement(TexCacheEntry *entry, int &w, int &h) {
+ReplacedTexture &TextureCacheCommon::FindReplacement(TexCacheEntry *entry, int &w, int &h, int &d) {
+	if (d != 1) {
+		// We don't yet support replacing 3D textures.
+		return replacer_.FindNone();
+	}
+
 	// Short circuit the non-enabled case.
 	// Otherwise, due to bReplaceTexturesAllowLate, we'll still spawn tasks looking for replacements
 	// that then won't be used.
@@ -1751,6 +1766,7 @@ void TextureCacheCommon::ApplyTexture() {
 			ApplyTextureFramebuffer(nextFramebufferTexture_, gstate.getTextureFormat(), depth ? NOTIFY_FB_DEPTH : NOTIFY_FB_COLOR);
 			nextFramebufferTexture_ = nullptr;
 		}
+		gstate_c.SetTextureIs3D(false);
 		return;
 	}
 
@@ -1805,6 +1821,7 @@ void TextureCacheCommon::ApplyTexture() {
 	entry->lastFrame = gpuStats.numFlips;
 	BindTexture(entry);
 	gstate_c.SetTextureFullAlpha(entry->GetAlphaStatus() == TexCacheEntry::STATUS_ALPHA_FULL);
+	gstate_c.SetTextureIs3D((entry->status & TexCacheEntry::STATUS_3D) != 0);
 }
 
 void TextureCacheCommon::Clear(bool delete_them) {

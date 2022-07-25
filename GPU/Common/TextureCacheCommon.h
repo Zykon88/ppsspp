@@ -134,6 +134,8 @@ struct TexCacheEntry {
 		STATUS_FRAMEBUFFER_OVERLAP = 0x1000,
 
 		STATUS_FORCE_REBUILD = 0x2000,
+
+		STATUS_3D = 0x4000,
 	};
 
 	// Status, but int so we can zero initialize.
@@ -286,7 +288,7 @@ protected:
 	CheckAlphaResult DecodeTextureLevel(u8 *out, int outPitch, GETextureFormat format, GEPaletteFormat clutformat, uint32_t texaddr, int level, int bufw, bool reverseColors, bool useBGRA, bool expandTo32Bit);
 	void UnswizzleFromMem(u32 *dest, u32 destPitch, const u8 *texptr, u32 bufw, u32 height, u32 bytesPerPixel);
 	CheckAlphaResult ReadIndexedTex(u8 *out, int outPitch, int level, const u8 *texptr, int bytesPerIndex, int bufw, bool reverseColors, bool expandTo32Bit);
-	ReplacedTexture &FindReplacement(TexCacheEntry *entry, int &w, int &h);
+	ReplacedTexture &FindReplacement(TexCacheEntry *entry, int &w, int &h, int &d);
 
 	template <typename T>
 	inline const T *GetCurrentClut() {

@@ -627,8 +627,21 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 	}
 
 	// In addition, simply don't load more than level 0 if g_Config.bMipMap is false.
+	bool pure3D = false;
+	int depth = 1;
+
 	if (badMipSizes) {
-		maxLevel = 0;
+		// Check for pure 3D texture.
+		int tw = gstate.getTextureWidth(0);
+		int th = gstate.getTextureHeight(0);
+		pure3D = true;
+		for (int i = 0; i < maxLevel; i++) {
+			if (gstate.getTextureWidth(i) != gstate.getTextureWidth(0) || gstate.getTextureHeight(i) != gstate.getTextureHeight(0)) {
+				pure3D = false;
+			}
+		}
+
+		depth = maxLevel + 1;
 	}
 
 	// We generate missing mipmaps from maxLevel+1 up to this level. maxLevel can get overwritten below
@@ -644,6 +657,11 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 		dstFmt = VK_FORMAT_R8G8B8A8_UNORM;
 	}
 
+	if (depth > 1) {
+		// We don't scale 3D textures yet.
+		scaleFactor = 1;
+	}
+
 	// Rachet down scale factor in low-memory mode.
 	// TODO: I think really we should just turn it off?
 	if (lowMemoryMode_ && !hardwareScaling) {
@@ -653,7 +671,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 
 	int w = gstate.getTextureWidth(0);
 	int h = gstate.getTextureHeight(0);
-	ReplacedTexture &replaced = FindReplacement(entry, w, h);
+	ReplacedTexture &replaced = FindReplacement(entry, w, h, depth);
 	if (replaced.Valid()) {
 		// We're replacing, so we won't scale.
 		scaleFactor = 1;
@@ -769,7 +787,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 		snprintf(texName, sizeof(texName), "tex_%08x_%s", entry->addr, GeTextureFormatToString((GETextureFormat)entry->format, gstate.getClutPaletteFormat()));
 		image->SetTag(texName);
 
-		bool allocSuccess = image->CreateDirect(cmdInit, w * scaleFactor, h * scaleFactor, maxLevelToGenerate + 1, actualFmt, imageLayout, usage, mapping);
+		bool allocSuccess = image->CreateDirect(cmdInit, w * scaleFactor, h * scaleFactor, depth, maxLevelToGenerate + 1, actualFmt, imageLayout, usage, mapping);
 		if (!allocSuccess && !lowMemoryMode_) {
 			WARN_LOG_REPORT(G3D, "Texture cache ran out of GPU memory; switching to low memory mode");
 			lowMemoryMode_ = true;
@@ -788,7 +806,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 			scaleFactor = 1;
 			actualFmt = dstFmt;
 
-			allocSuccess = image->CreateDirect(cmdInit, w * scaleFactor, h * scaleFactor, maxLevelToGenerate + 1, actualFmt, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, mapping);
+			allocSuccess = image->CreateDirect(cmdInit, w * scaleFactor, h * scaleFactor, depth, maxLevelToGenerate + 1, actualFmt, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, mapping);
 		}
 
 		if (!allocSuccess) {
@@ -800,7 +818,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 
 	ReplacedTextureDecodeInfo replacedInfo;
 	bool willSaveTex = false;
-	if (replacer_.Enabled() && !replaced.Valid()) {
+	if (replacer_.Enabled() && !replaced.Valid() && !pure3D) {
 		replacedInfo.cachekey = entry->CacheKey();
 		replacedInfo.hash = entry->fullhash;
 		replacedInfo.addr = entry->addr;
@@ -819,7 +837,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 
 		u8 level = 0;
 		bool fakeMipmap = false;
-		if (IsFakeMipmapChange()) {
+		if (IsFakeMipmapChange() && !pure3D) {
 			level = std::max(0, gstate.getTexLevelOffset16() / 16);
 			fakeMipmap = level > 0;
 		}
@@ -866,12 +884,15 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 				replacementTimeThisFrame_ += time_now_d() - replaceStart;
 				VK_PROFILE_BEGIN(vulkan, cmdInit, VK_PIPELINE_STAGE_TRANSFER_BIT,
 					"Copy Upload (replaced): %dx%d", mipWidth, mipHeight);
-				entry->vkTex->UploadMip(cmdInit, i, mipWidth, mipHeight, texBuf, bufferOffset, stride / bpp);
+				entry->vkTex->UploadMip(cmdInit, i, mipWidth, mipHeight, 0, texBuf, bufferOffset, stride / bpp);
 				VK_PROFILE_END(vulkan, cmdInit, VK_PIPELINE_STAGE_TRANSFER_BIT);
 			} else {
 				if (fakeMipmap) {
 					loadLevel(size, i, stride, scaleFactor);
-					entry->vkTex->UploadMip(cmdInit, 0, mipWidth, mipHeight, texBuf, bufferOffset, stride / bpp);
+					entry->vkTex->UploadMip(cmdInit, 0, mipWidth, mipHeight, 0, texBuf, bufferOffset, stride / bpp);
+				} else if (pure3D) {
+					loadLevel(size, i, stride, scaleFactor);
+					entry->vkTex->UploadMip(cmdInit, 0, mipWidth, mipHeight, i, texBuf, bufferOffset, stride / bpp);
 				} else {
 					if (computeUpload) {
 						int srcBpp = dstFmt == VULKAN_8888_FORMAT ? 4 : 2;
@@ -896,7 +917,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 						loadLevel(size, i, stride, scaleFactor);
 						VK_PROFILE_BEGIN(vulkan, cmdInit, VK_PIPELINE_STAGE_TRANSFER_BIT,
 							"Copy Upload: %dx%d", mipWidth, mipHeight);
-						entry->vkTex->UploadMip(cmdInit, i, mipWidth, mipHeight, texBuf, bufferOffset, stride / bpp);
+						entry->vkTex->UploadMip(cmdInit, i, mipWidth, mipHeight, 0, texBuf, bufferOffset, stride / bpp);
 						VK_PROFILE_END(vulkan, cmdInit, VK_PIPELINE_STAGE_TRANSFER_BIT);
 					}
 				}
@@ -923,7 +944,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 			VK_PROFILE_END(vulkan, cmdInit, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
 
-		if (maxLevel == 0) {
+		if (maxLevel == 0 || pure3D) {
 			entry->status |= TexCacheEntry::STATUS_BAD_MIPS;
 		} else {
 			entry->status &= ~TexCacheEntry::STATUS_BAD_MIPS;
@@ -931,6 +952,11 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 		if (replaced.Valid()) {
 			entry->SetAlphaStatus(TexCacheEntry::TexStatus(replaced.AlphaStatus()));
 		}
+
+		if (pure3D) {
+			entry->status |= TexCacheEntry::STATUS_3D;
+		}
+
 		entry->vkTex->EndCreate(cmdInit, false, prevStage, layout);
 		VK_PROFILE_END(vulkan, cmdInit, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 	}

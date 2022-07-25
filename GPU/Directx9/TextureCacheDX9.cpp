@@ -441,7 +441,8 @@ void TextureCacheDX9::BuildTexture(TexCacheEntry *const entry) {
 
 	int w = gstate.getTextureWidth(0);
 	int h = gstate.getTextureHeight(0);
-	ReplacedTexture &replaced = FindReplacement(entry, w, h);
+	int depth = 1;
+	ReplacedTexture &replaced = FindReplacement(entry, w, h, depth);
 	if (replaced.Valid()) {
 		// We're replacing, so we won't scale.
 		scaleFactor = 1;
