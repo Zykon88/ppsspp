@@ -70,6 +70,7 @@ struct SamplerCacheKey {
 			bool sClamp : 1;
 			bool tClamp : 1;
 			bool aniso : 1;
+			bool texture3d : 1;
 		};
 	};
 	bool operator < (const SamplerCacheKey &other) const {

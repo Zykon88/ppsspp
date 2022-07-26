@@ -161,6 +161,7 @@ SamplerCacheKey TextureCacheCommon::GetSamplingParams(int maxLevel, const TexCac
 	key.sClamp = gstate.isTexCoordClampedS();
 	key.tClamp = gstate.isTexCoordClampedT();
 	key.aniso = false;
+	key.texture3d = gstate_c.curTextureIs3D;
 
 	GETexLevelMode mipMode = gstate.getTexLevelMode();
 	bool autoMip = mipMode == GE_TEXLEVEL_MODE_AUTO;
