@@ -928,7 +928,7 @@ void TextureCacheVulkan::BuildTexture(TexCacheEntry *const entry) {
 		VK_PROFILE_END(vulkan, cmdInit, VK_PIPELINE_STAGE_TRANSFER_BIT);
 	}
 
-	entry->vkTex->EndCreate(cmdInit, false, prevStage, computeUpload ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	entry->vkTex->EndCreate(cmdInit, false, prevStage, layout);
 	VK_PROFILE_END(vulkan, cmdInit, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
 
 	if (maxLevel == 0) {
