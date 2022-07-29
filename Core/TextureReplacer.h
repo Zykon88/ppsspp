@@ -70,8 +70,7 @@ struct ReplacementCacheKey {
 	u64 cachekey;
 	u32 hash;
 
-	ReplacementCacheKey(u64 c, u32 h) : cachekey(c), hash(h) {
-	}
+	ReplacementCacheKey(u64 c, u32 h) : cachekey(c), hash(h) { }
 
 	bool operator ==(const ReplacementCacheKey &k) const {
 		return k.cachekey == cachekey && k.hash == hash;
@@ -95,8 +94,7 @@ struct ReplacementAliasKey {
 		};
 	};
 
-	ReplacementAliasKey(u64 c, u32 h, u32 l) : cachekey(c), level(l), hash(h) {
-	}
+	ReplacementAliasKey(u64 c, u32 h, u32 l) : cachekey(c), level(l), hash(h) { }
 
 	bool operator ==(const ReplacementAliasKey &k) const {
 		return k.cachekey == cachekey && k.hashAndLevel == hashAndLevel;
@@ -129,11 +127,11 @@ namespace std {
 struct ReplacedTexture {
 	~ReplacedTexture();
 
-	inline bool Valid() {
+	inline bool Valid() const {
 		return !levels_.empty();
 	}
 
-	bool GetSize(int level, int &w, int &h) {
+	bool GetSize(int level, int &w, int &h) const {
 		if ((size_t)level < levels_.size()) {
 			w = levels_[level].w;
 			h = levels_[level].h;
@@ -142,18 +140,18 @@ struct ReplacedTexture {
 		return false;
 	}
 
-	int MaxLevel() {
-		return (int)levels_.size() - 1;
+	int NumLevels() const {
+		return (int)levels_.size();
 	}
 
-	ReplacedTextureFormat Format(int level) {
+	ReplacedTextureFormat Format(int level) const {
 		if ((size_t)level < levels_.size()) {
 			return levels_[level].fmt;
 		}
 		return ReplacedTextureFormat::F_8888;
 	}
 
-	u8 AlphaStatus() {
+	u8 AlphaStatus() const {
 		return (u8)alphaStatus_;
 	}
 
