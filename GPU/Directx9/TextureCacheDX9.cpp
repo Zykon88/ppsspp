@@ -214,7 +214,7 @@ void TextureCacheDX9::BindTexture(TexCacheEntry *entry) {
 		device_->SetTexture(0, texture);
 		lastBoundTexture = texture;
 	}
-	int maxLevel = (entry->status & TexCacheEntry::STATUS_BAD_MIPS) ? 0 : entry->maxLevel;
+	int maxLevel = (entry->status & TexCacheEntry::STATUS_NO_MIPS) ? 0 : entry->maxLevel;
 	SamplerCacheKey samplerKey = GetSamplingParams(maxLevel, entry);
 	ApplySamplingParams(samplerKey);
 }
@@ -422,8 +422,8 @@ void TextureCacheDX9::BuildTexture(TexCacheEntry *const entry) {
 	D3DPOOL pool = D3DPOOL_DEFAULT;
 	D3DFORMAT tfmt = (D3DFORMAT)(dstFmt);
 	int usage = D3DUSAGE_DYNAMIC;
-	if (plan.replaced->GetSize(plan.srcLevel, tw, th)) {
-		tfmt = ToD3D9Format(plan.replaced->Format(plan.srcLevel));
+	if (plan.replaced->GetSize(plan.baseLevelSrc, tw, th)) {
+		tfmt = ToD3D9Format(plan.replaced->Format(plan.baseLevelSrc));
 	} else {
 		tw *= plan.scaleFactor;
 		th *= plan.scaleFactor;
@@ -432,7 +432,7 @@ void TextureCacheDX9::BuildTexture(TexCacheEntry *const entry) {
 		}
 	}
 
-	HRESULT hr = device_->CreateTexture(tw, th, plan.levels, usage, tfmt, pool, &texture, NULL);
+	HRESULT hr = device_->CreateTexture(tw, th, plan.levelsToCreate, usage, tfmt, pool, &texture, NULL);
 
 	if (FAILED(hr)) {
 		INFO_LOG(G3D, "Failed to create D3D texture: %dx%d", tw, th);
@@ -446,7 +446,7 @@ void TextureCacheDX9::BuildTexture(TexCacheEntry *const entry) {
 	}
 
 	// Mipmapping is only enabled when texture scaling is disabled.
-	for (int i = 0; i < plan.levels; i++) {
+	for (int i = 0; i < plan.levelsToCreate; i++) {
 		int dstLevel = i;
 		HRESULT result;
 		uint32_t lockFlag = dstLevel == 0 ? D3DLOCK_DISCARD : 0;  // Can only discard the top level
@@ -460,7 +460,7 @@ void TextureCacheDX9::BuildTexture(TexCacheEntry *const entry) {
 		uint8_t *data = (uint8_t *)rect.pBits;
 		int stride = rect.Pitch;
 
-		LoadTextureLevel(*entry, data, stride, *plan.replaced, (i == 0) ? plan.srcLevel : i, plan.scaleFactor, dstFmt);
+		LoadTextureLevel(*entry, data, stride, *plan.replaced, (i == 0) ? plan.baseLevelSrc : i, plan.scaleFactor, dstFmt);
 
 		texture->UnlockRect(dstLevel);
 	}
